@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+GIT_DIR="$1"
+GITHUB_REPO="$2"
+
+
+for ref in $(git -C $GIT_DIR for-each-ref --format '%(refname)' refs/heads); do
+  ref_id=$(git -C $GIT_DIR rev-parse $ref)
+  ref_id_found=$(git -C $GIT_DIR ls-remote --heads git@github.com:$GITHUB_REPO.git refs/tags/backup/*/$ref | grep $ref_id | wc -l)
+  if [ $ref_id_found -eq 0 ]; then
+    remote_ref="refs/heads/backup/$(date "+%Y-%m-%d--%H-%M")/${ref:11}"
+    git -C $GIT_DIR push -n --quiet "git@github.com:$GITHUB_REPO.git" $ref:$remote_ref
+    echo "✅ $ref => $remote_ref"
+  else
+    echo "🆗 $ref"
+  fi
+done
