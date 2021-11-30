@@ -3,15 +3,49 @@
 GIT_DIR="$1"
 GITHUB_REPO="$2"
 
+git -C $GIT_DIR push "git@github.com:$GITHUB_REPO.git" master
+echo "✅ master"
+
+# TODO: UTC
+now=$(date "+%Y-%m-%d--%H-%M")
+date_pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}--[0-9]{2}-[0-9]{2}"
+# TODO: -C probably isn't needed here
+remote_heads=$(git -C $GIT_DIR ls-remote --heads git@github.com:$GITHUB_REPO.git refs/heads/backup/*)
 
 for ref in $(git -C $GIT_DIR for-each-ref --format '%(refname)' refs/heads); do
   ref_id=$(git -C $GIT_DIR rev-parse $ref)
-  ref_id_found=$(git -C $GIT_DIR ls-remote --heads git@github.com:$GITHUB_REPO.git refs/tags/backup/*/$ref | grep $ref_id | wc -l)
-  if [ $ref_id_found -eq 0 ]; then
-    remote_ref="refs/heads/backup/$(date "+%Y-%m-%d--%H-%M")/${ref:11}"
-    git -C $GIT_DIR push -n --quiet "git@github.com:$GITHUB_REPO.git" $ref:$remote_ref
-    echo "✅ $ref => $remote_ref"
-  else
+  # note: "" in echo are important to preserve lines
+  ref_remote_heads=$(echo "$remote_heads" | grep $ref_id)
+
+  remote_ref1="refs/heads/backup/$(hostname)/$now/${ref:11}"
+  remote_ref2="refs/heads/backup/$(hostname)/${ref:11}/$now"
+  remote_ref3="refs/heads/backup/${ref:11}/$now/$(hostname)"
+
+  ref_found1=$(echo "$ref_remote_heads" | grep -i -E "refs/heads/backup/$(hostname)/$date_pattern/${ref:11}" | wc -l)
+  ref_found2=$(echo "$ref_remote_heads" | grep -i -E "refs/heads/backup/$(hostname)/${ref:11}/$date_pattern" | wc -l)
+  ref_found3=$(echo "$ref_remote_heads" | grep -i -E "refs/heads/backup/${ref:11}/$date_pattern/$(hostname)" | wc -l)
+
+  if [[ $ref_found1 -gt 0 && $ref_found2 -gt 0 && $ref_found3 -gt 0 ]]; then
     echo "🆗 $ref"
+    continue
+  else
+    echo "🔶 $ref"
+  fi
+
+  #  2> /dev/null is to suppress "remote: Create a pull request for…" output
+  # TODO: handle errors
+  if [ $ref_found1 -eq 0 ]; then
+    git -C $GIT_DIR push --quiet "git@github.com:$GITHUB_REPO.git" $ref:$remote_ref1 2> /dev/null
+    echo "  ✅ $remote_ref1"
+  fi
+
+  if [ $ref_found2 -eq 0 ]; then
+    git -C $GIT_DIR push --quiet "git@github.com:$GITHUB_REPO.git" $ref:$remote_ref2 2> /dev/null
+    echo "  ✅ $remote_ref2"
+  fi
+
+  if [ $ref_found3 -eq 0 ]; then
+    git -C $GIT_DIR push --quiet "git@github.com:$GITHUB_REPO.git" $ref:$remote_ref3 2> /dev/null
+    echo "  ✅ $remote_ref3"
   fi
 done
